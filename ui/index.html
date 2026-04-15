@@ -712,6 +712,11 @@
             }
         });
 
+        // --- Send button click handler ---
+        document.addEventListener('click', function(e) {
+            if (e.target.id === 'btn-send') window.sendMasterMessage();
+        });
+
         // --- Start ---
         document.addEventListener('DOMContentLoaded', init);
     })();
