@@ -54,6 +54,11 @@
             font-size: 13px;
             color: var(--text-secondary);
         }
+        .header .conn-status {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-left: auto;
+        }
 
         /* === Panel Container === */
         .panels-container {
@@ -97,6 +102,7 @@
             flex-shrink: 0;
         }
         .status-dot.active { background: var(--accent-green); animation: pulse 1.5s infinite; }
+        .status-dot.reviewing { background: var(--accent-yellow); animation: pulse 1.5s infinite; }
         .status-dot.error { background: var(--accent-red); }
         .status-dot.idle { background: var(--text-muted); }
 
@@ -168,6 +174,18 @@
             padding: 6px 12px;
             border-radius: 16px;
         }
+        .message.error {
+            align-self: flex-start;
+            background: #3d1214;
+            color: var(--accent-red);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+        }
+        .message.result {
+            align-self: flex-start;
+            background: #0f2d1a;
+            color: var(--accent-green);
+            border: 1px solid rgba(63, 185, 80, 0.3);
+        }
 
         /* Node transition badges */
         .node-badge {
@@ -178,8 +196,8 @@
             border-radius: 12px;
             font-size: 11px;
             font-weight: 600;
-            align-self: center;
         }
+        .node-badge.orchestrator { background: rgba(188, 140, 255, 0.15); color: var(--accent-purple); }
         .node-badge.foreman { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
         .node-badge.worker { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
         .node-badge.reviewer { background: rgba(210, 153, 34, 0.15); color: var(--accent-yellow); }
@@ -212,30 +230,6 @@
             overflow-y: auto;
         }
         .tool-call-body.expanded { display: block; }
-
-        /* Typing indicator */
-        .typing-indicator {
-            display: inline-flex;
-            gap: 4px;
-            padding: 8px 14px;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
-            align-self: flex-start;
-        }
-        .typing-indicator span {
-            width: 6px;
-            height: 6px;
-            border-radius: 50%;
-            background: var(--text-muted);
-            animation: typing 1.4s infinite;
-        }
-        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
-        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
-
-        @keyframes typing {
-            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
-            30% { transform: translateY(-4px); opacity: 1; }
-        }
 
         /* Waiting state */
         .waiting-message {
@@ -310,10 +304,10 @@
     <div class="header">
         <h1>Maestro</h1>
         <span class="subtitle">Multi-Agent Orchestrator</span>
+        <span class="conn-status" id="connectionStatus">Connecting...</span>
     </div>
 
     <div class="panels-container" id="panelsContainer">
-        <!-- Panels are generated dynamically by JavaScript -->
         <div style="padding: 40px; color: var(--text-muted); text-align: center; width: 100%;">
             Loading worker configuration...
         </div>
@@ -325,111 +319,64 @@
 
         // --- State ---
         let ws = null;
+        let wsReconnectDelay = 3000;
         let workerEventSources = {};
         let autoScrollFlags = {};  // panel-id -> bool
 
-        // --- Initialize ---
-        async function init() {
-            try {
-                const resp = await fetch('/api/workers');
-                const workers = await resp.json();
-                buildPanels(workers);
-                connectMasterWebSocket();
-                workers.forEach(w => connectWorkerSSE(w.name));
-            } catch (err) {
-                document.getElementById('panelsContainer').innerHTML =
-                    `<div style="padding: 40px; color: var(--accent-red); text-align: center; width: 100%;">
-                        Failed to load worker configuration: ${err.message}<br>
-                        <small>Make sure the API server is running on this host.</small>
-                    </div>`;
-            }
+        // --- Utilities ---
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
         }
 
-        // --- Build Panels ---
-        function buildPanels(workers) {
-            const container = document.getElementById('panelsContainer');
-            container.innerHTML = '';
-
-            // Master Orchestrator panel
-            const masterPanel = createPanel('master', 'Master Orchestrator', 'orchestrator', true);
-            container.appendChild(masterPanel);
-
-            // Worker panels
-            workers.forEach(w => {
-                const panel = createPanel(`worker-${w.name}`, w.name, w.type, false);
-                container.appendChild(panel);
-            });
+        function getNodeBadgeClass(nodeName) {
+            var n = nodeName.toLowerCase();
+            if (n.includes('foreman')) return 'foreman';
+            if (n.includes('review')) return 'reviewer';
+            if (n.includes('orchestrat')) return 'orchestrator';
+            return 'worker';
         }
 
-        function createPanel(id, title, type, isMaster) {
-            const panel = document.createElement('div');
-            panel.className = `panel${isMaster ? ' master-panel' : ''}`;
-            panel.id = `panel-${id}`;
-
-            const badgeText = isMaster ? 'orchestrator' : type;
-
-            panel.innerHTML = `
-                <div class="panel-header">
-                    <div class="status-dot idle" id="status-${id}"></div>
-                    <div class="panel-title">${escapeHtml(title)}</div>
-                    <span class="panel-badge">${escapeHtml(badgeText)}</span>
-                </div>
-                <div class="messages" id="messages-${id}">
-                    ${isMaster
-                        ? '<div class="message system">Connected to Master Orchestrator. Type a message to begin.</div>'
-                        : '<div class="waiting-message">Waiting for tasks...</div>'
-                    }
-                </div>
-                ${isMaster ? `
-                <div class="input-area">
-                    <textarea id="input-master" placeholder="Type your message..." rows="1"
-                        onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();window.sendMasterMessage();}"></textarea>
-                    <button id="btn-send" onclick="window.sendMasterMessage()">Send</button>
-                </div>` : ''}
-            `;
-
-            // Auto-scroll tracking
-            autoScrollFlags[id] = true;
-            const messagesDiv = panel.querySelector('.messages');
-            messagesDiv.addEventListener('scroll', () => {
-                const { scrollTop, scrollHeight, clientHeight } = messagesDiv;
-                autoScrollFlags[id] = (scrollHeight - scrollTop - clientHeight) < 50;
-            });
-
-            return panel;
+        function getNodeEmoji(nodeName) {
+            var n = nodeName.toLowerCase();
+            if (n.includes('foreman')) return '\uD83D\uDD35';
+            if (n.includes('review')) return '\uD83D\uDFE1';
+            if (n.includes('orchestrat')) return '\uD83E\uDDE0';
+            return '\uD83D\uDFE2';
         }
 
         // --- Auto-scroll helper ---
         function scrollToBottom(panelId) {
             if (!autoScrollFlags[panelId]) return;
-            const el = document.getElementById(`messages-${panelId}`);
+            var el = document.getElementById('messages-' + panelId);
             if (el) el.scrollTop = el.scrollHeight;
         }
 
         // --- Add message to panel ---
         function addMessage(panelId, content, className) {
-            const el = document.getElementById(`messages-${panelId}`);
+            var el = document.getElementById('messages-' + panelId);
             if (!el) return;
 
             // Remove waiting message if present
-            const waiting = el.querySelector('.waiting-message');
+            var waiting = el.querySelector('.waiting-message');
             if (waiting) waiting.remove();
 
-            const msg = document.createElement('div');
-            msg.className = `message ${className}`;
+            var msg = document.createElement('div');
+            msg.className = 'message ' + className;
             msg.textContent = content;
             el.appendChild(msg);
             scrollToBottom(panelId);
         }
 
         function addHtmlMessage(panelId, html, className) {
-            const el = document.getElementById(`messages-${panelId}`);
+            var el = document.getElementById('messages-' + panelId);
             if (!el) return;
 
-            const waiting = el.querySelector('.waiting-message');
+            var waiting = el.querySelector('.waiting-message');
             if (waiting) waiting.remove();
 
-            const msg = document.createElement('div');
+            var msg = document.createElement('div');
             msg.className = className || '';
             msg.innerHTML = html;
             el.appendChild(msg);
@@ -437,82 +384,182 @@
         }
 
         function setStatus(panelId, status) {
-            const dot = document.getElementById(`status-${panelId}`);
+            var dot = document.getElementById('status-' + panelId);
             if (dot) {
-                dot.className = `status-dot ${status}`;
+                dot.className = 'status-dot ' + status;
             }
+        }
+
+        function setBadge(panelId, text) {
+            var badge = document.getElementById('badge-' + panelId);
+            if (badge) badge.textContent = text;
+        }
+
+        // --- Initialize ---
+        async function init() {
+            try {
+                var resp = await fetch('/api/workers');
+                var data = await resp.json();
+                var workers = data.workers || data;
+                if (!Array.isArray(workers)) workers = [];
+
+                buildPanels(workers);
+                connectMasterWebSocket();
+                workers.forEach(function(w) { connectWorkerSSE(w.name); });
+
+                document.getElementById('connectionStatus').textContent =
+                    workers.length + ' worker(s) discovered';
+            } catch (err) {
+                document.getElementById('panelsContainer').innerHTML =
+                    '<div style="padding: 40px; color: var(--accent-red); text-align: center; width: 100%;">' +
+                    'Failed to load worker configuration: ' + escapeHtml(err.message) + '<br>' +
+                    '<small>Make sure the API server is running on this host.</small>' +
+                    '</div>';
+            }
+        }
+
+        // --- Build Panels ---
+        function buildPanels(workers) {
+            var container = document.getElementById('panelsContainer');
+            container.innerHTML = '';
+
+            // Master Orchestrator panel
+            container.appendChild(createPanel('master', 'Master Orchestrator', 'orchestrator', true));
+
+            // Worker panels
+            workers.forEach(function(w) {
+                container.appendChild(createPanel('worker-' + w.name, w.name, w.type, false));
+            });
+        }
+
+        function createPanel(id, title, type, isMaster) {
+            var panel = document.createElement('div');
+            panel.className = 'panel' + (isMaster ? ' master-panel' : '');
+            panel.id = 'panel-' + id;
+
+            var badgeText = isMaster ? 'orchestrator' : type;
+
+            panel.innerHTML =
+                '<div class="panel-header">' +
+                    '<div class="status-dot idle" id="status-' + id + '"></div>' +
+                    '<div class="panel-title">' + escapeHtml(title) + '</div>' +
+                    '<span class="panel-badge" id="badge-' + id + '">' + escapeHtml(badgeText) + '</span>' +
+                '</div>' +
+                '<div class="messages" id="messages-' + id + '">' +
+                    (isMaster
+                        ? '<div class="message system">Connected to Master Orchestrator. Type a message to begin.</div>'
+                        : '<div class="waiting-message">\u23F3 Waiting for tasks...</div>'
+                    ) +
+                '</div>' +
+                (isMaster
+                    ? '<div class="input-area">' +
+                        '<textarea id="input-master" placeholder="Type your message..." rows="1"></textarea>' +
+                        '<button id="btn-send">Send</button>' +
+                      '</div>'
+                    : '');
+
+            // Auto-scroll tracking
+            autoScrollFlags[id] = true;
+            var messagesDiv = panel.querySelector('.messages');
+            messagesDiv.addEventListener('scroll', function() {
+                var st = messagesDiv.scrollTop;
+                var sh = messagesDiv.scrollHeight;
+                var ch = messagesDiv.clientHeight;
+                autoScrollFlags[id] = (sh - st - ch) < 50;
+            });
+
+            return panel;
         }
 
         // --- Master WebSocket ---
         function connectMasterWebSocket() {
-            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-            ws = new WebSocket(`${protocol}//${location.host}/ws/master`);
+            var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(protocol + '//' + location.host + '/ws/master');
 
-            ws.onopen = () => {
+            ws.onopen = function() {
                 setStatus('master', 'idle');
-                console.log('WebSocket connected to master');
+                document.getElementById('connectionStatus').textContent = 'Connected';
+                wsReconnectDelay = 3000;
+                var btn = document.getElementById('btn-send');
+                if (btn) btn.disabled = false;
             };
 
-            ws.onmessage = (event) => {
-                const data = JSON.parse(event.data);
+            ws.onmessage = function(event) {
+                var data = JSON.parse(event.data);
                 handleMasterEvent(data);
             };
 
-            ws.onclose = () => {
+            ws.onclose = function() {
                 setStatus('master', 'error');
-                addMessage('master', 'Connection lost. Reconnecting in 3s...', 'system');
-                setTimeout(connectMasterWebSocket, 3000);
+                document.getElementById('connectionStatus').textContent =
+                    'Disconnected \u2014 reconnecting...';
+                var btn = document.getElementById('btn-send');
+                if (btn) btn.disabled = true;
+                setTimeout(connectMasterWebSocket, wsReconnectDelay);
+                wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000);
             };
 
-            ws.onerror = (err) => {
-                console.error('WebSocket error:', err);
+            ws.onerror = function() {
                 setStatus('master', 'error');
+                document.getElementById('connectionStatus').textContent = 'Connection error';
             };
         }
 
         function handleMasterEvent(data) {
-            switch (data.type) {
-                case 'node_start':
-                    setStatus('master', 'active');
-                    addHtmlMessage('master',
-                        `<span class="node-badge ${data.node === 'orchestrator' ? 'foreman' : 'worker'}">
-                            ${data.node === 'orchestrator' ? '&#x1f9e0;' : '&#x2699;&#xfe0f;'} ${escapeHtml(data.node)}
-                        </span>`, 'node-badge-wrapper');
-                    break;
+            if (data.type === 'node_update') {
+                setStatus('master', 'active');
+                setBadge('master', data.node || 'working');
 
-                case 'content':
-                    addMessage('master', data.content, 'assistant');
-                    break;
+                // Show node badge
+                var cls = getNodeBadgeClass(data.node);
+                var emoji = getNodeEmoji(data.node);
+                addHtmlMessage('master',
+                    '<span class="node-badge ' + cls + '">' +
+                    emoji + ' ' + escapeHtml(data.node) +
+                    '</span>', 'node-badge-wrapper');
 
-                case 'dispatch':
-                    addMessage('master', '\u2192 Dispatched to ' + data.worker, 'dispatch');
-                    // Activate the worker panel
-                    setStatus(`worker-${data.worker}`, 'active');
-                    break;
+                // Show dispatch indicator if routing to a worker
+                if (data.next_actor && data.next_actor !== 'end') {
+                    addMessage('master',
+                        '\u2192 Dispatched to ' + data.next_actor, 'dispatch');
+                }
 
-                case 'worker_result':
-                    addMessage('master', data.content, 'assistant');
-                    break;
+                // Show execution plan if present
+                if (data.execution_plan) {
+                    addMessage('master', data.execution_plan, 'assistant');
+                }
 
-                case 'done':
-                    setStatus('master', 'idle');
-                    document.getElementById('btn-send').disabled = false;
-                    document.getElementById('input-master').disabled = false;
-                    break;
+                // Show messages if present
+                if (data.messages && data.messages.length > 0) {
+                    data.messages.forEach(function(m) {
+                        addMessage('master', m, 'assistant');
+                    });
+                }
 
-                case 'error':
-                    setStatus('master', 'error');
-                    addMessage('master', 'Error: ' + data.content, 'system');
-                    document.getElementById('btn-send').disabled = false;
-                    document.getElementById('input-master').disabled = false;
-                    break;
+            } else if (data.type === 'graph_done') {
+                setStatus('master', 'idle');
+                setBadge('master', 'ready');
+                addMessage('master', '\u2705 Graph execution complete', 'system');
+                var btn = document.getElementById('btn-send');
+                var input = document.getElementById('input-master');
+                if (btn) btn.disabled = false;
+                if (input) input.disabled = false;
+
+            } else if (data.type === 'error') {
+                setStatus('master', 'error');
+                setBadge('master', 'error');
+                addMessage('master', '\u274C ' + (data.content || 'Unknown error'), 'error');
+                var btn2 = document.getElementById('btn-send');
+                var input2 = document.getElementById('input-master');
+                if (btn2) btn2.disabled = false;
+                if (input2) input2.disabled = false;
             }
         }
 
         // --- Send message ---
         window.sendMasterMessage = function() {
-            const input = document.getElementById('input-master');
-            const text = input.value.trim();
+            var input = document.getElementById('input-master');
+            var text = input.value.trim();
             if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
 
             addMessage('master', text, 'user');
@@ -523,22 +570,29 @@
             document.getElementById('btn-send').disabled = true;
             document.getElementById('input-master').disabled = true;
             setStatus('master', 'active');
+            setBadge('master', 'working');
         };
 
         // --- Worker SSE ---
         function connectWorkerSSE(workerName) {
-            const panelId = `worker-${workerName}`;
+            var panelId = 'worker-' + workerName;
 
-            const es = new EventSource(`/api/workers/${encodeURIComponent(workerName)}/events`);
+            var es = new EventSource('/api/workers/' + encodeURIComponent(workerName) + '/events');
             workerEventSources[workerName] = es;
 
-            es.onmessage = (event) => {
-                const data = JSON.parse(event.data);
+            es.onmessage = function(event) {
+                var data;
+                try {
+                    data = JSON.parse(event.data);
+                } catch(e) {
+                    return;
+                }
                 handleWorkerEvent(panelId, workerName, data);
             };
 
-            es.onerror = () => {
+            es.onerror = function() {
                 setStatus(panelId, 'error');
+                setBadge(panelId, 'reconnecting');
                 // EventSource auto-reconnects
             };
         }
@@ -546,8 +600,18 @@
         function handleWorkerEvent(panelId, workerName, data) {
             switch (data.type) {
                 case 'status':
-                    if (data.status === 'connected') {
-                        setStatus(panelId, 'idle');
+                    var statusMap = {
+                        'connected': 'idle',
+                        'working': 'active',
+                        'idle': 'idle',
+                        'complete': 'active',
+                        'error': 'error',
+                        'reviewing': 'reviewing'
+                    };
+                    setStatus(panelId, statusMap[data.status] || 'idle');
+                    setBadge(panelId, data.status || 'idle');
+                    if (data.content) {
+                        addMessage(panelId, data.content, 'dispatch');
                     }
                     break;
 
@@ -557,77 +621,94 @@
 
                 case 'node_update':
                     setStatus(panelId, 'active');
-                    var nodeClass = data.node.includes('foreman') ? 'foreman'
-                        : data.node.includes('reviewer') ? 'reviewer'
-                        : 'worker';
-                    var emoji = data.node.includes('foreman') ? '&#x1f535;'
-                        : data.node.includes('reviewer') ? '&#x1f7e1;'
-                        : '&#x1f7e2;';
+                    var cls = getNodeBadgeClass(data.node);
+                    var emoji = getNodeEmoji(data.node);
                     addHtmlMessage(panelId,
-                        `<span class="node-badge ${nodeClass}">${emoji} ${escapeHtml(data.node)}</span>`,
-                        'node-badge-wrapper');
+                        '<span class="node-badge ' + cls + '">' +
+                        emoji + ' ' + escapeHtml(data.node) +
+                        '</span>', 'node-badge-wrapper');
+                    setBadge(panelId, data.node || 'working');
                     break;
 
                 case 'foreman_instructions':
+                    setStatus(panelId, 'active');
+                    setBadge(panelId, 'foreman');
                     addMessage(panelId, data.content, 'assistant');
                     break;
 
                 case 'worker_output':
+                    setStatus(panelId, 'active');
+                    setBadge(panelId, 'working');
                     addMessage(panelId, data.content, 'assistant');
                     break;
 
                 case 'review_notes':
+                    setStatus(panelId, 'reviewing');
+                    setBadge(panelId, 'reviewing');
                     addMessage(panelId, data.content, 'assistant');
                     break;
 
+                case 'agent_stream':
                 case 'agent_thinking':
-                    addMessage(panelId, data.content, 'assistant');
+                    addMessage(panelId, data.content || '', 'assistant');
                     break;
 
                 case 'tool_use':
-                    addHtmlMessage(panelId, `
-                        <div class="tool-call">
-                            <div class="tool-call-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
-                                &#x1f527; ${escapeHtml(data.tool || 'tool call')}
-                                <span style="margin-left:auto; font-size:10px;">&#x25bc;</span>
-                            </div>
-                            <div class="tool-call-body">${escapeHtml(data.content || JSON.stringify(data.args || {}))}</div>
-                        </div>
-                    `, '');
+                    addHtmlMessage(panelId,
+                        '<div class="tool-call">' +
+                            '<div class="tool-call-header" onclick="this.nextElementSibling.classList.toggle(\'expanded\')">' +
+                                '\uD83D\uDD27 ' + escapeHtml(data.tool || 'tool call') +
+                                '<span style="margin-left:auto; font-size:10px;">\u25BC</span>' +
+                            '</div>' +
+                            '<div class="tool-call-body">' +
+                                escapeHtml(data.content || JSON.stringify(data.args || {})) +
+                            '</div>' +
+                        '</div>', '');
                     break;
 
                 case 'routing':
                     addMessage(panelId, '\u2192 Next: ' + data.next_actor, 'dispatch');
                     break;
 
+                case 'result':
+                    setStatus(panelId, 'active');
+                    setBadge(panelId, 'complete');
+                    addMessage(panelId, '\u2705 ' + (data.content || ''), 'result');
+                    break;
+
                 case 'done':
                     setStatus(panelId, 'idle');
+                    setBadge(panelId, 'done');
                     if (data.text) {
-                        addMessage(panelId, 'Complete: ' + data.text.substring(0, 200) + (data.text.length > 200 ? '...' : ''), 'system');
+                        var preview = data.text.substring(0, 200);
+                        if (data.text.length > 200) preview += '...';
+                        addMessage(panelId, '\u2705 Complete: ' + preview, 'result');
                     } else {
-                        addMessage(panelId, 'Task complete', 'system');
+                        addMessage(panelId, '\u2705 Task complete', 'system');
                     }
                     break;
 
                 case 'error':
                     setStatus(panelId, 'error');
-                    addMessage(panelId, 'Error: ' + data.content, 'system');
+                    setBadge(panelId, 'error');
+                    addMessage(panelId, '\u274C ' + (data.content || 'Error'), 'error');
                     break;
             }
         }
 
-        // --- Utilities ---
-        function escapeHtml(str) {
-            const div = document.createElement('div');
-            div.textContent = str;
-            return div.innerHTML;
-        }
-
         // --- Auto-resize textarea ---
-        document.addEventListener('input', (e) => {
+        document.addEventListener('input', function(e) {
             if (e.target.tagName === 'TEXTAREA') {
                 e.target.style.height = 'auto';
                 e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }
+        });
+
+        // --- Keyboard handlers (after DOM is built) ---
+        document.addEventListener('keydown', function(e) {
+            if (e.target.id === 'input-master' && e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                window.sendMasterMessage();
             }
         });
 
