@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+httpx
+websockets
+langchain-core
+langgraph
+langchain-anthropic

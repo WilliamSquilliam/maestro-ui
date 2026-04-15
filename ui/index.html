@@ -3,300 +3,637 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maestro — Chat UI</title>
+    <title>Maestro — Multi-Agent Orchestrator</title>
     <style>
-        *, *::before, *::after {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
+        /* === Reset & Base === */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-tertiary: #21262d;
+            --border-color: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent-blue: #58a6ff;
+            --accent-green: #3fb950;
+            --accent-yellow: #d29922;
+            --accent-red: #f85149;
+            --accent-purple: #bc8cff;
+            --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+            --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
         }
 
         body {
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #0d1117;
-            color: #c9d1d9;
+            font-family: var(--font-sans);
+            background: var(--bg-primary);
+            color: var(--text-primary);
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
         }
 
-        header {
-            background-color: #161b22;
-            border-bottom: 1px solid #30363d;
-            padding: 12px 24px;
+        /* === Header === */
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 12px 20px;
             display: flex;
             align-items: center;
             gap: 12px;
             flex-shrink: 0;
         }
-
-        header h1 {
-            font-size: 1.25rem;
+        .header h1 {
+            font-size: 18px;
             font-weight: 600;
-            color: #58a6ff;
+            color: var(--text-primary);
+        }
+        .header .subtitle {
+            font-size: 13px;
+            color: var(--text-secondary);
         }
 
-        header span.subtitle {
-            font-size: 0.85rem;
-            color: #8b949e;
-        }
-
-        .chat-container {
+        /* === Panel Container === */
+        .panels-container {
+            flex: 1;
             display: flex;
-            flex: 1;
+            overflow-x: auto;
+            overflow-y: hidden;
             gap: 1px;
-            background-color: #30363d;
-            overflow: hidden;
+            background: var(--border-color);
         }
 
-        .chat-panel {
+        /* === Individual Panel === */
+        .panel {
             flex: 1;
+            min-width: 380px;
+            max-width: 600px;
             display: flex;
             flex-direction: column;
-            background-color: #0d1117;
-            min-width: 0;
+            background: var(--bg-primary);
+        }
+        .panel.master-panel {
+            min-width: 420px;
+            border-right: 2px solid var(--accent-blue);
         }
 
-        .chat-header {
-            background-color: #161b22;
-            border-bottom: 1px solid #30363d;
+        /* Panel Header */
+        .panel-header {
+            background: var(--bg-secondary);
             padding: 10px 16px;
-            font-weight: 600;
-            font-size: 0.95rem;
-            color: #c9d1d9;
-            flex-shrink: 0;
             display: flex;
             align-items: center;
             gap: 8px;
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
         }
-
-        .chat-header .dot {
+        .status-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
-            background-color: #3fb950;
-            display: inline-block;
+            background: var(--text-muted);
+            flex-shrink: 0;
+        }
+        .status-dot.active { background: var(--accent-green); animation: pulse 1.5s infinite; }
+        .status-dot.error { background: var(--accent-red); }
+        .status-dot.idle { background: var(--text-muted); }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
         }
 
-        .chat-messages {
+        .panel-title {
+            font-size: 14px;
+            font-weight: 600;
+            flex: 1;
+        }
+        .panel-badge {
+            font-size: 11px;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+
+        /* Messages Area */
+        .messages {
             flex: 1;
             overflow-y: auto;
             padding: 16px;
             display: flex;
             flex-direction: column;
-            gap: 10px;
+            gap: 12px;
         }
 
-        .chat-messages::-webkit-scrollbar {
-            width: 6px;
-        }
-
-        .chat-messages::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .chat-messages::-webkit-scrollbar-thumb {
-            background-color: #30363d;
-            border-radius: 3px;
-        }
-
+        /* Message Bubbles */
         .message {
-            max-width: 80%;
+            max-width: 95%;
             padding: 10px 14px;
-            border-radius: 12px;
-            font-size: 0.9rem;
-            line-height: 1.45;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.5;
             word-wrap: break-word;
+            white-space: pre-wrap;
         }
-
         .message.user {
             align-self: flex-end;
-            background-color: #1f6feb;
-            color: #ffffff;
-            border-bottom-right-radius: 4px;
+            background: #1f6feb;
+            color: white;
+            border-bottom-right-radius: 2px;
         }
-
-        .message.system {
+        .message.assistant {
             align-self: flex-start;
-            background-color: #21262d;
-            color: #c9d1d9;
-            border: 1px solid #30363d;
-            border-bottom-left-radius: 4px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-bottom-left-radius: 2px;
+        }
+        .message.system {
+            align-self: center;
+            background: transparent;
+            color: var(--text-muted);
+            font-size: 12px;
+            font-style: italic;
+            padding: 4px 8px;
+        }
+        .message.dispatch {
+            align-self: center;
+            background: rgba(88, 166, 255, 0.1);
+            border: 1px solid rgba(88, 166, 255, 0.3);
+            color: var(--accent-blue);
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 16px;
         }
 
-        .message .timestamp {
-            font-size: 0.7rem;
-            color: rgba(255, 255, 255, 0.45);
-            margin-top: 4px;
-            display: block;
-        }
-
-        .message.system .timestamp {
-            color: #484f58;
-        }
-
-        .chat-input-area {
-            border-top: 1px solid #30363d;
-            padding: 12px 16px;
-            display: flex;
-            gap: 8px;
-            background-color: #161b22;
-            flex-shrink: 0;
-        }
-
-        .chat-input-area input[type="text"] {
-            flex: 1;
-            padding: 10px 14px;
-            border: 1px solid #30363d;
-            border-radius: 8px;
-            background-color: #0d1117;
-            color: #c9d1d9;
-            font-size: 0.9rem;
-            outline: none;
-            transition: border-color 0.2s;
-        }
-
-        .chat-input-area input[type="text"]:focus {
-            border-color: #58a6ff;
-        }
-
-        .chat-input-area input[type="text"]::placeholder {
-            color: #484f58;
-        }
-
-        .chat-input-area button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 8px;
-            background-color: #238636;
-            color: #ffffff;
-            font-size: 0.9rem;
+        /* Node transition badges */
+        .node-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 11px;
             font-weight: 600;
+            align-self: center;
+        }
+        .node-badge.foreman { background: rgba(88, 166, 255, 0.15); color: var(--accent-blue); }
+        .node-badge.worker { background: rgba(63, 185, 80, 0.15); color: var(--accent-green); }
+        .node-badge.reviewer { background: rgba(210, 153, 34, 0.15); color: var(--accent-yellow); }
+
+        /* Tool calls */
+        .tool-call {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            margin: 4px 0;
+            font-family: var(--font-mono);
+            font-size: 12px;
+            overflow: hidden;
+        }
+        .tool-call-header {
+            padding: 6px 10px;
+            background: var(--bg-tertiary);
+            color: var(--accent-purple);
             cursor: pointer;
-            transition: background-color 0.2s;
-            white-space: nowrap;
-        }
-
-        .chat-input-area button:hover {
-            background-color: #2ea043;
-        }
-
-        .chat-input-area button:active {
-            background-color: #1a7f37;
-        }
-
-        .empty-state {
             display: flex;
             align-items: center;
-            justify-content: center;
-            flex: 1;
-            color: #484f58;
-            font-size: 0.9rem;
-            font-style: italic;
+            gap: 6px;
+        }
+        .tool-call-header:hover { background: #2d333b; }
+        .tool-call-body {
+            padding: 8px 10px;
+            color: var(--text-secondary);
+            display: none;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .tool-call-body.expanded { display: block; }
+
+        /* Typing indicator */
+        .typing-indicator {
+            display: inline-flex;
+            gap: 4px;
+            padding: 8px 14px;
+            background: var(--bg-tertiary);
+            border-radius: 8px;
+            align-self: flex-start;
+        }
+        .typing-indicator span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--text-muted);
+            animation: typing 1.4s infinite;
+        }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes typing {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+            30% { transform: translateY(-4px); opacity: 1; }
         }
 
-        @media (max-width: 700px) {
-            .chat-container {
+        /* Waiting state */
+        .waiting-message {
+            color: var(--text-muted);
+            font-size: 13px;
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* === Input Area (master panel only) === */
+        .input-area {
+            padding: 12px 16px;
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .input-area textarea {
+            flex: 1;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            padding: 8px 12px;
+            font-family: var(--font-sans);
+            font-size: 13px;
+            resize: none;
+            outline: none;
+            min-height: 40px;
+            max-height: 120px;
+        }
+        .input-area textarea:focus {
+            border-color: var(--accent-blue);
+        }
+        .input-area button {
+            background: #238636;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            align-self: flex-end;
+        }
+        .input-area button:hover { background: #2ea043; }
+        .input-area button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        /* === Responsive === */
+        @media (max-width: 900px) {
+            .panels-container {
                 flex-direction: column;
+                overflow-x: hidden;
+                overflow-y: auto;
+            }
+            .panel {
+                min-width: 100%;
+                max-width: 100%;
+                min-height: 400px;
             }
         }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--bg-tertiary); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--border-color); }
     </style>
 </head>
 <body>
-    <header>
+    <div class="header">
         <h1>Maestro</h1>
-        <span class="subtitle">Multi-Agent Chat Interface</span>
-    </header>
+        <span class="subtitle">Multi-Agent Orchestrator</span>
+    </div>
 
-    <div class="chat-container">
-        <!-- Chat Panel 1 -->
-        <div class="chat-panel" id="panel-1">
-            <div class="chat-header">
-                <span class="dot"></span>
-                Chat 1
-            </div>
-            <div class="chat-messages" id="messages-1">
-                <div class="empty-state" id="empty-1">No messages yet. Start a conversation.</div>
-            </div>
-            <div class="chat-input-area">
-                <input type="text" id="input-1" placeholder="Type a message..." autocomplete="off">
-                <button onclick="sendMessage(1)">Send</button>
-            </div>
-        </div>
-
-        <!-- Chat Panel 2 -->
-        <div class="chat-panel" id="panel-2">
-            <div class="chat-header">
-                <span class="dot"></span>
-                Chat 2
-            </div>
-            <div class="chat-messages" id="messages-2">
-                <div class="empty-state" id="empty-2">No messages yet. Start a conversation.</div>
-            </div>
-            <div class="chat-input-area">
-                <input type="text" id="input-2" placeholder="Type a message..." autocomplete="off">
-                <button onclick="sendMessage(2)">Send</button>
-            </div>
+    <div class="panels-container" id="panelsContainer">
+        <!-- Panels are generated dynamically by JavaScript -->
+        <div style="padding: 40px; color: var(--text-muted); text-align: center; width: 100%;">
+            Loading worker configuration...
         </div>
     </div>
 
     <script>
-        function getTimestamp() {
-            const now = new Date();
-            return now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        }
+    (function() {
+        'use strict';
 
-        function sendMessage(panelId) {
-            const input = document.getElementById(`input-${panelId}`);
-            const messagesContainer = document.getElementById(`messages-${panelId}`);
-            const emptyState = document.getElementById(`empty-${panelId}`);
-            const text = input.value.trim();
+        // --- State ---
+        let ws = null;
+        let workerEventSources = {};
+        let autoScrollFlags = {};  // panel-id -> bool
 
-            if (!text) return;
-
-            // Remove empty state if present
-            if (emptyState) {
-                emptyState.remove();
+        // --- Initialize ---
+        async function init() {
+            try {
+                const resp = await fetch('/api/workers');
+                const workers = await resp.json();
+                buildPanels(workers);
+                connectMasterWebSocket();
+                workers.forEach(w => connectWorkerSSE(w.name));
+            } catch (err) {
+                document.getElementById('panelsContainer').innerHTML =
+                    `<div style="padding: 40px; color: var(--accent-red); text-align: center; width: 100%;">
+                        Failed to load worker configuration: ${err.message}<br>
+                        <small>Make sure the API server is running on this host.</small>
+                    </div>`;
             }
-
-            // Create user message
-            const msgDiv = document.createElement('div');
-            msgDiv.classList.add('message', 'user');
-            msgDiv.innerHTML = `${escapeHtml(text)}<span class="timestamp">${getTimestamp()}</span>`;
-            messagesContainer.appendChild(msgDiv);
-
-            // Clear input
-            input.value = '';
-            input.focus();
-
-            // Scroll to bottom
-            messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-            // Simulate a system echo response after a short delay
-            setTimeout(() => {
-                const replyDiv = document.createElement('div');
-                replyDiv.classList.add('message', 'system');
-                replyDiv.innerHTML = `Echo: ${escapeHtml(text)}<span class="timestamp">${getTimestamp()}</span>`;
-                messagesContainer.appendChild(replyDiv);
-                messagesContainer.scrollTop = messagesContainer.scrollHeight;
-            }, 400);
         }
 
-        function escapeHtml(text) {
+        // --- Build Panels ---
+        function buildPanels(workers) {
+            const container = document.getElementById('panelsContainer');
+            container.innerHTML = '';
+
+            // Master Orchestrator panel
+            const masterPanel = createPanel('master', 'Master Orchestrator', 'orchestrator', true);
+            container.appendChild(masterPanel);
+
+            // Worker panels
+            workers.forEach(w => {
+                const panel = createPanel(`worker-${w.name}`, w.name, w.type, false);
+                container.appendChild(panel);
+            });
+        }
+
+        function createPanel(id, title, type, isMaster) {
+            const panel = document.createElement('div');
+            panel.className = `panel${isMaster ? ' master-panel' : ''}`;
+            panel.id = `panel-${id}`;
+
+            const badgeText = isMaster ? 'orchestrator' : type;
+
+            panel.innerHTML = `
+                <div class="panel-header">
+                    <div class="status-dot idle" id="status-${id}"></div>
+                    <div class="panel-title">${escapeHtml(title)}</div>
+                    <span class="panel-badge">${escapeHtml(badgeText)}</span>
+                </div>
+                <div class="messages" id="messages-${id}">
+                    ${isMaster
+                        ? '<div class="message system">Connected to Master Orchestrator. Type a message to begin.</div>'
+                        : '<div class="waiting-message">Waiting for tasks...</div>'
+                    }
+                </div>
+                ${isMaster ? `
+                <div class="input-area">
+                    <textarea id="input-master" placeholder="Type your message..." rows="1"
+                        onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();window.sendMasterMessage();}"></textarea>
+                    <button id="btn-send" onclick="window.sendMasterMessage()">Send</button>
+                </div>` : ''}
+            `;
+
+            // Auto-scroll tracking
+            autoScrollFlags[id] = true;
+            const messagesDiv = panel.querySelector('.messages');
+            messagesDiv.addEventListener('scroll', () => {
+                const { scrollTop, scrollHeight, clientHeight } = messagesDiv;
+                autoScrollFlags[id] = (scrollHeight - scrollTop - clientHeight) < 50;
+            });
+
+            return panel;
+        }
+
+        // --- Auto-scroll helper ---
+        function scrollToBottom(panelId) {
+            if (!autoScrollFlags[panelId]) return;
+            const el = document.getElementById(`messages-${panelId}`);
+            if (el) el.scrollTop = el.scrollHeight;
+        }
+
+        // --- Add message to panel ---
+        function addMessage(panelId, content, className) {
+            const el = document.getElementById(`messages-${panelId}`);
+            if (!el) return;
+
+            // Remove waiting message if present
+            const waiting = el.querySelector('.waiting-message');
+            if (waiting) waiting.remove();
+
+            const msg = document.createElement('div');
+            msg.className = `message ${className}`;
+            msg.textContent = content;
+            el.appendChild(msg);
+            scrollToBottom(panelId);
+        }
+
+        function addHtmlMessage(panelId, html, className) {
+            const el = document.getElementById(`messages-${panelId}`);
+            if (!el) return;
+
+            const waiting = el.querySelector('.waiting-message');
+            if (waiting) waiting.remove();
+
+            const msg = document.createElement('div');
+            msg.className = className || '';
+            msg.innerHTML = html;
+            el.appendChild(msg);
+            scrollToBottom(panelId);
+        }
+
+        function setStatus(panelId, status) {
+            const dot = document.getElementById(`status-${panelId}`);
+            if (dot) {
+                dot.className = `status-dot ${status}`;
+            }
+        }
+
+        // --- Master WebSocket ---
+        function connectMasterWebSocket() {
+            const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            ws = new WebSocket(`${protocol}//${location.host}/ws/master`);
+
+            ws.onopen = () => {
+                setStatus('master', 'idle');
+                console.log('WebSocket connected to master');
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleMasterEvent(data);
+            };
+
+            ws.onclose = () => {
+                setStatus('master', 'error');
+                addMessage('master', 'Connection lost. Reconnecting in 3s...', 'system');
+                setTimeout(connectMasterWebSocket, 3000);
+            };
+
+            ws.onerror = (err) => {
+                console.error('WebSocket error:', err);
+                setStatus('master', 'error');
+            };
+        }
+
+        function handleMasterEvent(data) {
+            switch (data.type) {
+                case 'node_start':
+                    setStatus('master', 'active');
+                    addHtmlMessage('master',
+                        `<span class="node-badge ${data.node === 'orchestrator' ? 'foreman' : 'worker'}">
+                            ${data.node === 'orchestrator' ? '&#x1f9e0;' : '&#x2699;&#xfe0f;'} ${escapeHtml(data.node)}
+                        </span>`, 'node-badge-wrapper');
+                    break;
+
+                case 'content':
+                    addMessage('master', data.content, 'assistant');
+                    break;
+
+                case 'dispatch':
+                    addMessage('master', '\u2192 Dispatched to ' + data.worker, 'dispatch');
+                    // Activate the worker panel
+                    setStatus(`worker-${data.worker}`, 'active');
+                    break;
+
+                case 'worker_result':
+                    addMessage('master', data.content, 'assistant');
+                    break;
+
+                case 'done':
+                    setStatus('master', 'idle');
+                    document.getElementById('btn-send').disabled = false;
+                    document.getElementById('input-master').disabled = false;
+                    break;
+
+                case 'error':
+                    setStatus('master', 'error');
+                    addMessage('master', 'Error: ' + data.content, 'system');
+                    document.getElementById('btn-send').disabled = false;
+                    document.getElementById('input-master').disabled = false;
+                    break;
+            }
+        }
+
+        // --- Send message ---
+        window.sendMasterMessage = function() {
+            const input = document.getElementById('input-master');
+            const text = input.value.trim();
+            if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+            addMessage('master', text, 'user');
+            ws.send(JSON.stringify({ message: text }));
+            input.value = '';
+            input.style.height = 'auto';
+
+            document.getElementById('btn-send').disabled = true;
+            document.getElementById('input-master').disabled = true;
+            setStatus('master', 'active');
+        };
+
+        // --- Worker SSE ---
+        function connectWorkerSSE(workerName) {
+            const panelId = `worker-${workerName}`;
+
+            const es = new EventSource(`/api/workers/${encodeURIComponent(workerName)}/events`);
+            workerEventSources[workerName] = es;
+
+            es.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                handleWorkerEvent(panelId, workerName, data);
+            };
+
+            es.onerror = () => {
+                setStatus(panelId, 'error');
+                // EventSource auto-reconnects
+            };
+        }
+
+        function handleWorkerEvent(panelId, workerName, data) {
+            switch (data.type) {
+                case 'status':
+                    if (data.status === 'connected') {
+                        setStatus(panelId, 'idle');
+                    }
+                    break;
+
+                case 'heartbeat':
+                    // Ignore keepalives
+                    break;
+
+                case 'node_update':
+                    setStatus(panelId, 'active');
+                    var nodeClass = data.node.includes('foreman') ? 'foreman'
+                        : data.node.includes('reviewer') ? 'reviewer'
+                        : 'worker';
+                    var emoji = data.node.includes('foreman') ? '&#x1f535;'
+                        : data.node.includes('reviewer') ? '&#x1f7e1;'
+                        : '&#x1f7e2;';
+                    addHtmlMessage(panelId,
+                        `<span class="node-badge ${nodeClass}">${emoji} ${escapeHtml(data.node)}</span>`,
+                        'node-badge-wrapper');
+                    break;
+
+                case 'foreman_instructions':
+                    addMessage(panelId, data.content, 'assistant');
+                    break;
+
+                case 'worker_output':
+                    addMessage(panelId, data.content, 'assistant');
+                    break;
+
+                case 'review_notes':
+                    addMessage(panelId, data.content, 'assistant');
+                    break;
+
+                case 'agent_thinking':
+                    addMessage(panelId, data.content, 'assistant');
+                    break;
+
+                case 'tool_use':
+                    addHtmlMessage(panelId, `
+                        <div class="tool-call">
+                            <div class="tool-call-header" onclick="this.nextElementSibling.classList.toggle('expanded')">
+                                &#x1f527; ${escapeHtml(data.tool || 'tool call')}
+                                <span style="margin-left:auto; font-size:10px;">&#x25bc;</span>
+                            </div>
+                            <div class="tool-call-body">${escapeHtml(data.content || JSON.stringify(data.args || {}))}</div>
+                        </div>
+                    `, '');
+                    break;
+
+                case 'routing':
+                    addMessage(panelId, '\u2192 Next: ' + data.next_actor, 'dispatch');
+                    break;
+
+                case 'done':
+                    setStatus(panelId, 'idle');
+                    if (data.text) {
+                        addMessage(panelId, 'Complete: ' + data.text.substring(0, 200) + (data.text.length > 200 ? '...' : ''), 'system');
+                    } else {
+                        addMessage(panelId, 'Task complete', 'system');
+                    }
+                    break;
+
+                case 'error':
+                    setStatus(panelId, 'error');
+                    addMessage(panelId, 'Error: ' + data.content, 'system');
+                    break;
+            }
+        }
+
+        // --- Utilities ---
+        function escapeHtml(str) {
             const div = document.createElement('div');
-            div.textContent = text;
+            div.textContent = str;
             return div.innerHTML;
         }
 
-        // Allow sending messages with Enter key
-        document.getElementById('input-1').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') sendMessage(1);
+        // --- Auto-resize textarea ---
+        document.addEventListener('input', (e) => {
+            if (e.target.tagName === 'TEXTAREA') {
+                e.target.style.height = 'auto';
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px';
+            }
         });
 
-        document.getElementById('input-2').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') sendMessage(2);
-        });
+        // --- Start ---
+        document.addEventListener('DOMContentLoaded', init);
+    })();
     </script>
 </body>
 </html>

@@ -1,0 +1,8 @@
+{
+    "graph": {
+        "worker_nodes": [
+            {"name": "worker", "type": "worker", "port": 8000},
+            {"name": "devops", "type": "devops", "port": 8001}
+        ]
+    }
+}
