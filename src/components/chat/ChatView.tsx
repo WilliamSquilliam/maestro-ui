@@ -11,13 +11,18 @@ export function ChatView() {
     ? messages.filter(m => m.node === chatFilter) 
     : messages;
 
-  const displayInFlight = chatFilter 
+  const displayInFlight = (chatFilter 
     ? inFlightIds.filter(id => inFlightEventBuffers[id].node === chatFilter)
-    : inFlightIds;
+    : inFlightIds).sort((a, b) => {
+        const msgA = inFlightEventBuffers[a];
+        const msgB = inFlightEventBuffers[b];
+        if (msgA.seq !== undefined && msgB.seq !== undefined) return msgA.seq - msgB.seq;
+        return msgA.timestamp - msgB.timestamp;
+    });
 
   return (
     <div className="absolute inset-0 flex flex-col">
-      <ScrollArea className="flex-1 p-4">
+      <ScrollArea className="flex-1 min-h-0 p-4">
         <div className="max-w-4xl mx-auto space-y-6 pb-24">
           {displayMessages.length === 0 && displayInFlight.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground pt-32">

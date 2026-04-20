@@ -11,8 +11,7 @@ export function LeftNav({ activeTab, setActiveTab }: LeftNavProps) {
   const { loopLimit, pendingQuestions, activeNodes, chatFilter, setChatFilter, archTab, setArchTab } = useStore();
   const rawNodes = Object.keys(activeNodes);
   
-  // Use a heuristic or generic mapping for n containers.
-  const nodes = rawNodes.length > 0 ? rawNodes : ["orchestrator", "worker", "architect"];
+  const nodes = rawNodes;
 
   const pendingCount = Object.keys(pendingQuestions).length;
 

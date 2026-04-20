@@ -1,4 +1,6 @@
-import useWebSocket, { ReadyState } from "react-use-websocket";
+import ReactUseWebSocket, { ReadyState } from "react-use-websocket";
+
+const useWebSocket = ((ReactUseWebSocket as unknown as { default?: typeof ReactUseWebSocket }).default ?? ReactUseWebSocket);
 import { useEffect } from "react";
 import { useStore } from "./store";
 import { IncomingFrame, OutgoingFrame } from "./protocol";
@@ -14,6 +16,7 @@ export function useMaestroSocket() {
       shouldReconnect: () => true,
       reconnectAttempts: 10,
       reconnectInterval: 3000,
+      share: true,
     }
   );
 

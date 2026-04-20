@@ -22,6 +22,7 @@ export interface ChatMessage {
   node: string;
   run_id: string;
   timestamp: number;
+  seq?: number;
   blocks: ChatBlock[];
   telemetry?: TelemetryData;
   status: "started" | "waiting_for_tool" | "finished" | "cancelled" | "error";
@@ -33,12 +34,12 @@ export function applyAgentEvent(state: any, frame: AgentEvent) {
   const buffer = state.inFlightEventBuffers[msgId];
   
   if (!buffer) {
-    // New message
     const newMsg: ChatMessage = {
       id: msgId,
       node: frame.node,
       run_id: frame.run_id,
       timestamp: frame.timestamp,
+      seq: frame.seq,
       blocks: [],
       status: "started"
     };
@@ -55,9 +56,15 @@ function updateBuffer(state: any, msgId: string, updatedMsg: ChatMessage) {
       delete nextBuffers[msgId];
       // dedupe existing if re-arrived
       const filtered = state.messages.filter((m: ChatMessage) => m.id !== msgId);
+      const newMessages = [...filtered, updatedMsg].sort((a, b) => {
+          if (a.seq !== undefined && b.seq !== undefined) {
+              return a.seq - b.seq;
+          }
+          return a.timestamp - b.timestamp;
+      });
       return {
           inFlightEventBuffers: nextBuffers,
-          messages: [...filtered, updatedMsg],
+          messages: newMessages,
           activeNodes: { ...state.activeNodes, [updatedMsg.node]: true }
       };
   }

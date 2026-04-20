@@ -3,13 +3,13 @@ import remarkGfm from 'remark-gfm';
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ChatMessage, ChatBlock } from "@/lib/eventReducer";
-import { Terminal, Database, Wrench, FunctionSquare, Loader2 } from "lucide-react";
+import { Terminal, Database, Wrench, FunctionSquare, Loader2, Waypoints } from "lucide-react";
 
 export function MessageBubble({ msg }: { msg: ChatMessage }) {
   return (
     <Card className="p-4 shadow-sm border border-border bg-card overflow-hidden">
       <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border/50">
-        <Badge variant={msg.node === 'orchestrator' ? 'default' : 'secondary'} className="font-mono text-[10px] uppercase tracking-wider">
+        <Badge variant="secondary" className="font-mono text-[10px] uppercase tracking-wider">
           {msg.node}
         </Badge>
         <span className="text-xs text-muted-foreground font-mono opacity-50">
@@ -76,6 +76,19 @@ function MessageBlock({ block }: { block: ChatBlock }) {
   }
 
   if (block.kind === "tool_result") {
+    if (block.call_id === "dispatch") {
+      return (
+        <div className="bg-primary/20 rounded-md p-3 font-mono text-xs border border-primary/40 shadow-sm">
+          <div className="flex items-center gap-2 mb-2">
+             <Waypoints className="w-3.5 h-3.5 text-primary" />
+             <span className="font-semibold text-primary opacity-90">Graph Routing</span>
+          </div>
+          <pre className="overflow-x-auto text-primary/90 pl-5 whitespace-pre-wrap break-all">
+             {block.content}
+          </pre>
+        </div>
+      );
+    }
     return (
       <div className={`bg-muted/30 rounded-md p-3 font-mono text-xs border ${block.is_error ? 'border-destructive/30 bg-destructive/5' : 'border-border'}`}>
         <div className="flex items-center gap-2 mb-2">

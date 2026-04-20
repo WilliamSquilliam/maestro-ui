@@ -39,29 +39,33 @@ export const useStore = create<MaestroState>((set) => ({
       case "orchestrator_status":
         return { status: frame.status };
       case "orchestrator_event": {
-        // Handle legacy flat messages and metadata
+        // Handle metadata from orchestrator execution loops
         const newNodes = { ...state.activeNodes, [frame.node]: true };
         const updates = { activeNodes: newNodes, loopLimit: { ...state.loopLimit } };
         if (frame.data.consecutive_worker_loops !== undefined) {
           updates.loopLimit.current = frame.data.consecutive_worker_loops;
         }
 
-        const legacyMessages = frame.data.messages?.map((m, i) => ({
-            id: `legacy-${Date.now()}-${i}`,
-            node: frame.node,
-            run_id: "legacy",
-            timestamp: Date.now(),
-            blocks: [{ kind: "content" as const, content: m.content }],
-            status: "finished" as const
-        })) || [];
-
         return {
-            ...updates,
-            messages: [...state.messages, ...legacyMessages]
+            ...updates
         };
       }
-      case "orchestrator_done":
-        return { status: "idle" };
+      case "orchestrator_done": {
+        // Flush any remaining active messages to finished 
+        const flushedMessages = Object.values(state.inFlightEventBuffers).map(m => ({
+            ...m,
+            status: "finished" as const
+        }));
+        const newMessages = [...state.messages, ...flushedMessages].sort((a, b) => {
+            if (a.seq !== undefined && b.seq !== undefined) return a.seq - b.seq;
+            return a.timestamp - b.timestamp;
+        });
+        return { 
+            status: "idle",
+            messages: newMessages,
+            inFlightEventBuffers: {} 
+        };
+      }
       case "architecture_diagram":
         return { diagram: frame.workspace, activeNodes: { ...state.activeNodes, [frame.node]: true } };
       case "question":

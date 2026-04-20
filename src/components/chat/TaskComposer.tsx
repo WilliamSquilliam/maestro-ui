@@ -46,13 +46,10 @@ export function TaskComposer() {
         </div>
         <TooltipProvider>
           <Tooltip>
-            {/* @ts-expect-error React 19 typing mismatch with Radix UI */}
-            <TooltipTrigger asChild>
-               <span>
-                  <Button size="icon" disabled={!content.trim() || isBusy} onClick={handleSend} className="h-8 w-8 rounded-full">
-                    <SendHorizontal className="h-4 w-4" />
-                  </Button>
-               </span>
+            <TooltipTrigger render={<span />}>
+              <Button size="icon" disabled={!content.trim() || isBusy} onClick={handleSend} className="h-8 w-8 rounded-full">
+                <SendHorizontal className="h-4 w-4" />
+              </Button>
             </TooltipTrigger>
             <TooltipContent>
               {isBusy ? "Cannot send task while orchestrator is busy" : "Send Task"}
