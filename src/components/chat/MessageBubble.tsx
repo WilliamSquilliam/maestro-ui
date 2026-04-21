@@ -6,6 +6,17 @@ import { ChatMessage, ChatBlock } from "@/lib/eventReducer";
 import { Terminal, Database, Wrench, FunctionSquare, Loader2, Waypoints } from "lucide-react";
 
 export function MessageBubble({ msg }: { msg: ChatMessage }) {
+  if (msg.role === "user") {
+    const text = msg.blocks.map(b => b.content || "").join("\n");
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[75%] rounded-2xl bg-primary text-primary-foreground px-4 py-2 shadow-sm whitespace-pre-wrap break-words text-sm">
+          {text}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card className="p-4 shadow-sm border border-border bg-card overflow-hidden">
       <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border/50">
@@ -22,7 +33,7 @@ export function MessageBubble({ msg }: { msg: ChatMessage }) {
           </span>
         ) : null}
       </div>
-      
+
       <div className="flex flex-col gap-4">
         {msg.blocks.map((block, idx) => (
           <MessageBlock key={idx} block={block} />

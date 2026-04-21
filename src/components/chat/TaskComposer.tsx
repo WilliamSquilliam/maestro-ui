@@ -9,13 +9,14 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from "@/comp
 export function TaskComposer() {
   const [content, setContent] = useState("");
   const { send } = useMaestroSocket();
-  const { status } = useStore();
+  const { status, addUserMessage } = useStore();
 
   const isBusy = status === "busy";
 
   const handleSend = () => {
     if (!content.trim() || isBusy) return;
-    
+
+    addUserMessage(content);
     send({ type: "user_input", content });
     setContent("");
   };
@@ -37,7 +38,7 @@ export function TaskComposer() {
         onChange={(e) => setContent(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={isBusy ? "Orchestrator is busy..." : "Send a task to Maestro... (Cmd+Enter to send, /arch hints architect)"}
-        className="min-h-[80px] resize-none border-0 focus-visible:ring-0 px-4 py-3 bg-transparent"
+        className="min-h-[80px] resize-none border-0 focus-visible:ring-0 px-4 py-3 bg-transparent text-white"
         disabled={isBusy}
       />
       <div className="flex justify-between items-center px-4 py-2 bg-muted/30 border-t border-border">

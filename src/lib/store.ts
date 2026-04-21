@@ -17,6 +17,7 @@ export interface MaestroState {
   setArchTab: (tab: "c1" | "c2" | "c3" | "c4") => void;
 
   handleIncoming: (frame: IncomingFrame) => void;
+  addUserMessage: (content: string) => void;
   removeQuestion: (id: string) => void;
   clearChat: () => void;
 }
@@ -78,6 +79,20 @@ export const useStore = create<MaestroState>((set) => ({
       default:
         return {};
     }
+  }),
+
+  addUserMessage: (content) => set((state) => {
+    const now = Date.now();
+    const userMsg: ChatMessage = {
+      id: `user-${now}`,
+      node: "user",
+      run_id: "user",
+      timestamp: now,
+      blocks: [{ kind: "content", content }],
+      status: "finished",
+      role: "user",
+    };
+    return { messages: [...state.messages, userMsg] };
   }),
 
   removeQuestion: (id) => set((state) => {

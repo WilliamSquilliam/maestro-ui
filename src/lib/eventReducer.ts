@@ -27,6 +27,7 @@ export interface ChatMessage {
   telemetry?: TelemetryData;
   status: "started" | "waiting_for_tool" | "finished" | "cancelled" | "error";
   errorDetail?: string;
+  role?: "user" | "agent";
 }
 
 export function applyAgentEvent(state: any, frame: AgentEvent) {
