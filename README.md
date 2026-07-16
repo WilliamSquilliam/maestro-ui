@@ -1,73 +1,32 @@
-# React + TypeScript + Vite
+# Maestro UI
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+The web interface for [Maestro](https://github.com/WilliamSquilliam/maestro) — a LangGraph-powered multi-agent orchestration system. Maestro UI connects to a running Maestro host over WebSocket and visualizes the orchestrator and its container-node agents in real time: live agent activity and telemetry, the evolving C4 architecture diagram, and human-in-the-loop prompts.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **React 19 + TypeScript + Vite**
+- **Tailwind CSS + shadcn/ui** (Base UI primitives)
+- **React Flow** (`@xyflow/react`) + **elkjs** for the architecture diagram
+- **Zustand** for state, **react-use-websocket** for the live connection
+- **Sonner** for toasts
 
-## React Compiler
+## How it connects
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The app opens a single WebSocket to the Maestro host (default `ws://localhost:8001/ws`, defined in [`src/lib/ws.ts`](src/lib/ws.ts)). It receives orchestrator status, `agent_event` telemetry, human-in-the-loop `question`, and `architecture_diagram` frames, and sends user input and question replies. The Maestro host must be running for the UI to have anything to display.
 
-## Expanding the ESLint configuration
+## Getting started
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+npm run dev        # start the Vite dev server, then open the printed local URL
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Other scripts:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm run build      # type-check and build for production
+npm run preview    # preview the production build
+npm run lint       # run ESLint
 ```
+
+> The WebSocket URL is currently hardcoded in [`src/lib/ws.ts`](src/lib/ws.ts). Point it at your Maestro host if it isn't running on `localhost:8001`.
